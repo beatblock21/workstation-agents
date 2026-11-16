@@ -13,6 +13,7 @@ class Handoff:
     status: str = "ok"  # ok | needs_human | failed
     open_questions: list = field(default_factory=list)
     files: list = field(default_factory=list)
+    decisions: list = field(default_factory=list)
     id: str = field(default_factory=lambda: time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4])
 
     def save(self):
