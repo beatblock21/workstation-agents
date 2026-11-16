@@ -45,3 +45,10 @@ def resume(path):
     if h.status == "needs_human" and h.open_questions:
         escalate(h, "resume", h.to_dept, h.open_questions[0])
     return h
+
+def ask_text(dept, question, kind="question"):
+    print(f"\n=== {dept.upper()} ASKS ({kind}) ===")
+    print(question)
+    ans = input("> (Enter = use your judgment) ").strip()
+    log_decision({"kind": kind, "dept": dept, "question": question, "answer": ans or "(use your judgment)"})
+    return ans or "(use your judgment)"

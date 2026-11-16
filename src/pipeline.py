@@ -1,7 +1,9 @@
-import os, sys
+import os, re, sys
 from handoff import Handoff, ROOT
 from department import Department
 import human
+import runcheck
+from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
 
@@ -22,9 +24,43 @@ def step(dept, h, nxt):
             out.save()
             return out
 
-def run(goal):
+MAX_QUESTIONS = 5
+CLARIFY_PROMPT = ("You are the Research department. Read the goal and list the questions you must ask the owner "
+                  "before researching, only ones whose answers would change the approach (scope, scale, users, "
+                  "constraints, preferred tools, deadline). Max 5. One per line, each starting with 'Q:'. "
+                  "If the goal is already clear, reply NONE.")
+
+def clarify(goal):
+    raw = Department("research")._ask(f"GOAL:\n{goal}", CLARIFY_PROMPT)
+    qs = [l.strip()[2:].strip() for l in raw.splitlines() if l.strip().upper().startswith("Q:")][:MAX_QUESTIONS]
+    if not qs:
+        return ""
+    pairs = [(q, human.ask_text("research", q)) for q in qs]
+    return "\n\nOWNER CLARIFICATIONS:\n" + "\n".join(f"- Q: {q}\n  A: {a}" for q, a in pairs)
+
+def choose_option(h):
+    seen = {}
+    for l, n in re.findall(r"^[\s*#_-]*OPTION\s+([A-C])\b[\s:*\-]*(.+)$", h.deliverable, re.M | re.I):
+        seen.setdefault(l.upper(), n)
+    if len(seen) < 2:
+        return
+    rec = re.search(r"RECOMMENDATION\W*\s*([A-C])\b", h.deliverable, re.I)
+    q = "Research proposes these approaches (details in its brief). " + (f"It recommends {rec.group(1).upper()}. " if rec else "") + "Which should Dev take?"
+    labels = [f"{l}: {n.strip().strip('*')[:120]}" for l, n in seen.items()]
+    m = re.search(r"^[\s*#_-]*OPTION\s+A\b", h.deliverable, re.M | re.I)
+    print("\n--- RESEARCH BRIEF (options) ---\n" + h.deliverable[(m.start() if m else 0):][:2500] + "\n--- end ---")
+    ans = human.escalate(h, "decision", "research", q, labels + ["let Research decide"])
+    if not ans.startswith("let Research"):
+        h.deliverable += f"\n\nOWNER DECISION: proceed with {ans}"
+        h.save()
+
+def run(goal, auto=False):
+    if not auto:
+        goal += clarify(goal)
     h = Handoff(goal=goal, from_dept="owner", to_dept="research")
     research = step("research", h, "dev")
+    if not auto and research.status != "failed":
+        choose_option(research)
     if research.status == "failed":
         return research
     work = step("dev", research, "qa")
@@ -33,10 +69,13 @@ def run(goal):
     rounds = 0
     override = ""
     while True:
-        qa = step("qa", work, "shipping")
+        ok, report = runcheck.check(work.deliverable)
+        print("-> execution check:", report.splitlines()[0])
+        qa_in = replace(work, deliverable=work.deliverable + "\n\nEXECUTION RESULT (run by the system, not by you):\n" + report)
+        qa = step("qa", qa_in, "shipping")
         if qa.status == "failed":
             return qa
-        if passed(qa.deliverable):
+        if passed(qa.deliverable) and ok is not False:
             print("-> QA: PASS")
             break
         rounds += 1
@@ -56,7 +95,7 @@ def run(goal):
                 note = f"\n\nOWNER GUIDANCE:\n{ans}"
             rounds = MAX_QA_ROUNDS - 1
         fix = Handoff(goal=goal, from_dept="qa", to_dept="dev",
-                      deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}{note}")
+                      deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}\n\nEXECUTION RESULT:\n{report}{note}")
         work = step("dev", fix, "qa")
     final = Handoff(goal=goal, from_dept="qa", to_dept="shipping",
                     deliverable=f"{work.deliverable}\n\nQA VERDICT:\n{qa.deliverable}{override}")
@@ -68,11 +107,12 @@ def run(goal):
     return ship
 
 if __name__ == "__main__":
-    arg = " ".join(sys.argv[1:]).strip()
+    auto = "--auto" in sys.argv
+    arg = " ".join(a for a in sys.argv[1:] if a != "--auto").strip()
     if not arg:
         sys.exit('usage: python src\\pipeline.py "goal text"  (or a path to a goals file)')
     if os.path.isfile(arg):
         with open(arg, encoding="utf-8") as f:
             arg = f.read()
-    res = run(arg)
+    res = run(arg, auto)
     print("Final status:", res.status)
