@@ -18,11 +18,11 @@ def ask(provider, messages, max_tokens=300, dept="misc"):
     budget.record(provider, dept, getattr(r.usage, 'total_tokens', 0))
     return r.choices[0].message.content
 
-def chat(messages, chain, dept="misc"):
+def chat(messages, chain, dept="misc", max_tokens=300):
     errors = []
     for name in chain:
         try:
-            return name, ask(name, messages, dept=dept)
+            return name, ask(name, messages, max_tokens=max_tokens, dept=dept)
         except Exception as e:
             errors.append(f"{name}: {e}")
     raise RuntimeError("|".join(errors))
