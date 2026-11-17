@@ -59,6 +59,7 @@ check("truncated output retried once with doubled max_tokens", res == "complete"
 # 8. simulated 429 on every provider
 def boom(*a, **k):
     raise RuntimeError("429 simulated")
+llm.RETRY_WAIT = False
 real_ask = llm.ask
 llm.ask = boom
 try:
@@ -67,5 +68,23 @@ try:
 except RuntimeError as e:
     check("simulated 429 on all providers raises a clear error", all(n in str(e) for n in ["groq", "gemini", "openrouter"]))
 llm.ask = real_ask
+
+import time
+budget.RATE["groq"] = {"rpm": 2, "tpm": 1000}
+budget._WINDOW["groq"] = [(time.time(), 400), (time.time(), 400)]
+try:
+    budget.check("groq", "chaos")
+    check("per-minute guard blocks a provider at its RPM", False)
+except budget.RateLimited as e:
+    check("per-minute guard blocks a provider at its RPM", e.retry_after > 0)
+budget.RATE["groq"] = {"rpm": 30, "tpm": 1000}
+budget._WINDOW["groq"] = [(time.time(), 900)]
+try:
+    budget.check("groq", "chaos", est_tokens=200)
+    check("per-minute guard blocks a provider near its TPM", False)
+except budget.RateLimited:
+    check("per-minute guard blocks a provider near its TPM", True)
+budget._WINDOW["groq"] = []
+budget.RATE["groq"] = {"rpm": 30, "tpm": 8000}
 
 print(f"\n{sum(results)}/{len(results)} passed")

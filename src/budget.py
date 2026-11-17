@@ -1,4 +1,4 @@
-import json, os, datetime
+import json, os, datetime, time
 
 LIMITS = {  # per provider per UTC day; placeholders, tune later
     "groq": {"requests": 900, "tokens": 180000},
@@ -27,7 +27,8 @@ def _save(data):
     with open(PATH, "w") as f:
         json.dump(data, f, indent=1)
 
-def check(provider, dept):
+def check(provider, dept, est_tokens=0):
+    _check_rate(provider, est_tokens)
     u = _load()["usage"]
     lim = LIMITS[provider]
     share = DEPT_SHARE.get(dept, 1.0)
@@ -40,8 +41,32 @@ def check(provider, dept):
         raise BudgetExceeded(f"{provider}: {dept} daily share reached")
 
 def record(provider, dept, tokens):
+    _WINDOW.setdefault(provider, []).append((time.time(), int(tokens or 0)))
     data = _load()
     d = data["usage"].setdefault(f"{provider}|{dept}", {"requests": 0, "tokens": 0})
     d["requests"] += 1
     d["tokens"] += int(tokens or 0)
     _save(data)
+
+
+class RateLimited(BudgetExceeded):
+    def __init__(self, msg, retry_after):
+        super().__init__(msg)
+        self.retry_after = retry_after
+
+RATE = {  # per-minute limits (groq: docs; gemini: AI Studio chart; openrouter: unverified)
+    "groq": {"rpm": 30, "tpm": 8000},
+    "gemini": {"rpm": 15, "tpm": 250000},
+    "openrouter": {"rpm": 20, "tpm": None},
+}
+_WINDOW = {}
+
+def _check_rate(provider, est_tokens=0):
+    r = RATE.get(provider, {})
+    now = time.time()
+    w = [(t, k) for t, k in _WINDOW.get(provider, []) if now - t < 60]
+    _WINDOW[provider] = w
+    if r.get("rpm") and len(w) >= r["rpm"]:
+        raise RateLimited(f"{provider}: per-minute request limit", max(1.0, 61 - (now - w[0][0])))
+    if r.get("tpm") and w and sum(k for _, k in w) + est_tokens > r["tpm"]:
+        raise RateLimited(f"{provider}: per-minute token limit", max(1.0, 61 - (now - w[0][0])))
