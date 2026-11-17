@@ -3,6 +3,7 @@ from handoff import Handoff, ROOT
 from department import Department
 import human
 import runcheck
+import shipper
 from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
@@ -54,7 +55,7 @@ def choose_option(h):
         h.deliverable += f"\n\nOWNER DECISION: proceed with {ans}"
         h.save()
 
-def run(goal, auto=False):
+def run(goal, auto=False, repo=None):
     if not auto:
         goal += clarify(goal)
     h = Handoff(goal=goal, from_dept="owner", to_dept="research")
@@ -100,6 +101,11 @@ def run(goal, auto=False):
     final = Handoff(goal=goal, from_dept="qa", to_dept="shipping",
                     deliverable=f"{work.deliverable}\n\nQA VERDICT:\n{qa.deliverable}{override}")
     ship = step("shipping", final, "owner")
+    if repo and ship.status != "failed":
+        try:
+            shipper.ship(work.deliverable, ship.deliverable, repo)
+        except Exception as e:
+            print("SHIPPING ERROR:", e)
     out = os.path.join(ROOT, "state", f"result-{ship.id}.local.md")
     with open(out, "w", encoding="utf-8") as f:
         f.write(f"# Goal\n{goal}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n")
@@ -107,12 +113,18 @@ def run(goal, auto=False):
     return ship
 
 if __name__ == "__main__":
-    auto = "--auto" in sys.argv
-    arg = " ".join(a for a in sys.argv[1:] if a != "--auto").strip()
+    argv = sys.argv[1:]
+    repo = None
+    if "--repo" in argv:
+        i = argv.index("--repo")
+        repo = argv[i + 1]
+        del argv[i:i + 2]
+    auto = "--auto" in argv
+    arg = " ".join(a for a in argv if a != "--auto").strip()
     if not arg:
         sys.exit('usage: python src\\pipeline.py "goal text"  (or a path to a goals file)')
     if os.path.isfile(arg):
         with open(arg, encoding="utf-8") as f:
             arg = f.read()
-    res = run(arg, auto)
+    res = run(arg, auto, repo)
     print("Final status:", res.status)
