@@ -13,8 +13,15 @@ class Department:
     def _ask(self, user, system=None):
         msgs = [{"role": "system", "content": system or self.cfg["prompt"]},
                 {"role": "user", "content": user}]
-        provider, text = chat(msgs, self.cfg["chain"], dept=self.name, max_tokens=self.cfg.get("max_tokens", 800))
-        print(f"   [{self.name}] answered via {provider}")
+        mt = self.cfg.get("max_tokens", 800)
+        for _ in range(2):
+            provider, text = chat(msgs, self.cfg["chain"], dept=self.name, max_tokens=mt)
+            print(f"   [{self.name}] answered via {provider}")
+            if "[TRUNCATED" not in text:
+                break
+            mt *= 2
+            print(f"   [{self.name}] output was truncated; retrying with max_tokens={mt}")
+
         return text
 
     def delegate(self, subtasks):

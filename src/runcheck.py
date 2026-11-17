@@ -1,7 +1,7 @@
 import os, re, subprocess, sys, tempfile
 import shipper
 
-DANGEROUS = re.compile(r"\b(os\.remove|os\.unlink|os\.rmdir|os\.system|shutil\.rmtree|shutil\.move|rmtree|removedirs|subprocess|socket|requests|urllib|http\.client|ftplib|smtplib|eval|exec|__import__|ctypes|winreg)\b|open\([^)]*['\"][wax]")
+DANGEROUS = re.compile(r"\b(os\.remove|os\.unlink|os\.rmdir|os\.system|shutil\.rmtree|shutil\.move|rmtree|removedirs|subprocess|socket|requests|urllib\.request|urlopen|http\.client|ftplib|smtplib|eval|exec|__import__|ctypes|winreg)\b|open\([^)]*['\"][wax]")
 
 def blocks(text):
     return [b.strip("\n") for b in re.findall(r"```(?:python|py)\s*\n(.*?)```", text, re.S | re.I)]

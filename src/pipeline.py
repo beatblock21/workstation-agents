@@ -29,7 +29,8 @@ MAX_QUESTIONS = 5
 CLARIFY_PROMPT = ("You are the Research department. Read the goal and list the questions you must ask the owner "
                   "before researching, only ones whose answers would change the approach (scope, scale, users, "
                   "constraints, preferred tools, deadline). Max 5. One per line, each starting with 'Q:'. "
-                  "If the goal is already clear, reply NONE.")
+                  "First check the goal for contradictory or impossible constraints; if there are any, your first question must name the conflict and ask which constraint to relax. "
+"If the goal is already clear and consistent, reply NONE.")
 
 def clarify(goal):
     raw = Department("research")._ask(f"GOAL:\n{goal}", CLARIFY_PROMPT)
@@ -39,18 +40,27 @@ def clarify(goal):
     pairs = [(q, human.ask_text("research", q)) for q in qs]
     return "\n\nOWNER CLARIFICATIONS:\n" + "\n".join(f"- Q: {q}\n  A: {a}" for q, a in pairs)
 
-def choose_option(h):
+def choose_option(h, ask=True):
     seen = {}
     for l, n in re.findall(r"^[\s*#_-]*OPTION\s+([A-C])\b[\s:*\-]*(.+)$", h.deliverable, re.M | re.I):
         seen.setdefault(l.upper(), n)
     if len(seen) < 2:
         return
     rec = re.search(r"RECOMMENDATION\W*\s*([A-C])\b", h.deliverable, re.I)
+    if not ask and re.search(r"^\W*CONFLICT:", h.deliverable, re.M | re.I):
+        ask = True
+    if not ask:
+        if rec:
+            h.deliverable += f"\n\nOWNER DECISION (auto): follow Research's recommendation, option {rec.group(1).upper()}"
+            h.save()
+        return
     q = "Research proposes these approaches (details in its brief). " + (f"It recommends {rec.group(1).upper()}. " if rec else "") + "Which should Dev take?"
     labels = [f"{l}: {n.strip().strip('*')[:120]}" for l, n in seen.items()]
     m = re.search(r"^[\s*#_-]*OPTION\s+A\b", h.deliverable, re.M | re.I)
     print("\n--- RESEARCH BRIEF (options) ---\n" + h.deliverable[(m.start() if m else 0):][:2500] + "\n--- end ---")
     ans = human.escalate(h, "decision", "research", q, labels + ["let Research decide"])
+    if ans.startswith("let Research") and rec:
+        ans = f"follow Research's recommendation, option {rec.group(1).upper()}"
     if not ans.startswith("let Research"):
         h.deliverable += f"\n\nOWNER DECISION: proceed with {ans}"
         h.save()
@@ -72,8 +82,12 @@ def run(goal, auto=False, repo=None):
         goal += clarify(goal)
     h = Handoff(goal=goal, from_dept="owner", to_dept="research")
     research = step("research", h, "dev")
-    if not auto and research.status != "failed":
-        choose_option(research)
+    if research.status != "failed":
+        choose_option(research, ask=not auto)
+        dec = re.findall(r"^OWNER DECISION.*$", research.deliverable, re.M)
+        if dec:
+            goal += "\n\n" + "\n".join(dec) + "\nThe owner's decision overrides any conflicting constraint above; judge against it."
+            research.goal = goal
     if research.status == "failed":
         return research
     work = dev_step(research)
@@ -110,6 +124,13 @@ def run(goal, auto=False, repo=None):
         fix = Handoff(goal=goal, from_dept="qa", to_dept="dev",
                       deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}\n\nEXECUTION RESULT:\n{report}{note}")
         work = dev_step(fix)
+    if report.startswith("NOT RUN: flagged"):
+        gate_q = "The code was NOT executed (flagged patterns), so QA judged it by reading only.\n" + report
+        gate = human.escalate(qa, "approval", "qa", gate_q, ["ship unverified", "abort"])
+        if gate != "ship unverified":
+            qa.status = "failed"
+            qa.save()
+            return qa
     final = Handoff(goal=goal, from_dept="qa", to_dept="shipping",
                     deliverable=f"{work.deliverable}\n\nQA VERDICT:\n{qa.deliverable}{override}")
     ship = step("shipping", final, "owner")
