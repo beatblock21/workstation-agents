@@ -16,7 +16,10 @@ def ask(provider, messages, max_tokens=300, dept="misc"):
     client = OpenAI(base_url=p["base_url"], api_key=os.environ[p["key"]], timeout=20, max_retries=0)
     r = client.chat.completions.create(model=p["model"], messages= messages, max_tokens= max_tokens)
     budget.record(provider, dept, getattr(r.usage, 'total_tokens', 0))
-    return r.choices[0].message.content
+    text = r.choices[0].message.content or ""
+    if r.choices[0].finish_reason == "length":
+        text += "\n\n[TRUNCATED: output hit the token limit]"
+    return text
 
 def chat(messages, chain, dept="misc", max_tokens=300):
     errors = []

@@ -58,10 +58,10 @@ def choose_option(h):
 def dev_step(h):
     out = step("dev", h, "qa")
     tries = 0
-    while out.status != "failed" and not shipper.parse_files(out.deliverable) and tries < 2:
+    while out.status != "failed" and (not shipper.parse_files(out.deliverable) or "[TRUNCATED" in out.deliverable) and tries < 2:
         tries += 1
-        print("-> format gate: Dev output had no '### FILE:' blocks; asking Dev to redo")
-        note = ("FORMAT ERROR: your last answer had no '### FILE: path' blocks. Reply again with every file as a line "
+        print("-> format gate: Dev output was malformed or truncated; asking Dev to redo")
+        note = ("FORMAT ERROR: your last answer was cut off or had no '### FILE: path' blocks. Keep files shorter and reply again with every file as a line "
                 "'### FILE: relative/path' followed by a fenced code block.\n\nYOUR LAST ANSWER:\n" + out.deliverable)
         fix = Handoff(goal=h.goal, from_dept="owner", to_dept="dev", deliverable=h.deliverable + "\n\n" + note)
         out = step("dev", fix, "qa")
