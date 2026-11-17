@@ -47,7 +47,7 @@ def choose_option(h, ask=True):
         seen.setdefault(l.upper(), n)
     if len(seen) < 2:
         return
-    rec = re.search(r"RECOMMENDATION\W*\s*([A-C])\b", h.deliverable, re.I)
+    rec = re.search(r"RECOMMENDATION\W*[A-C]?\W*OPTION\s+([A-C])\b", h.deliverable, re.I) or re.search(r"RECOMMENDATION\W*\s*([A-C])\b", h.deliverable, re.I)
     if not ask and re.search(r"^\W*CONFLICT:", h.deliverable, re.M | re.I):
         ask = True
     if not ask:

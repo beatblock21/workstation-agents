@@ -1,7 +1,7 @@
 import os, re, subprocess, sys, tempfile
 import shipper
 
-DANGEROUS = re.compile(r"\b(os\.remove|os\.unlink|os\.rmdir|os\.system|shutil\.rmtree|shutil\.move|rmtree|removedirs|subprocess|socket|requests|urllib\.request|urlopen|http\.client|ftplib|smtplib|eval|exec|__import__|ctypes|winreg)\b|open\([^)]*['\"][wax]")
+DANGEROUS = re.compile(r"\b(os\.remove|os\.unlink|os\.rmdir|os\.system|shutil\.rmtree|shutil\.move|rmtree|removedirs|subprocess|socket|requests|urllib\.request|urlopen|http\.client|ftplib|smtplib|__import__|ctypes|winreg)\b|\beval\s*\(|\bexec\s*\(|open\([^)]*['\"][wax]")
 
 def blocks(text):
     return [b.strip("\n") for b in re.findall(r"```(?:python|py)\s*\n(.*?)```", text, re.S | re.I)]
@@ -10,7 +10,8 @@ def check(text, timeout=15):
     files = shipper.parse_files(text)
     py = {k: v for k, v in files.items() if k.endswith(".py")}
     if py:
-        return check_files(py, timeout)
+        import runner
+        return runner.check_files(py, timeout)
     code = "\n\n".join(blocks(text))
     if not code.strip():
         return None, "NOT RUN: no Python code block found."

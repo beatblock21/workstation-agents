@@ -2,7 +2,7 @@ import json, os, datetime
 
 LIMITS = {  # per provider per UTC day; placeholders, tune later
     "groq": {"requests": 900, "tokens": 180000},
-    "gemini": {"requests": 200, "tokens": 400000},
+    "gemini": {"requests": 450, "tokens": 2000000},
     "openrouter": {"requests": 40, "tokens": 150000},
 }
 DEPT_SHARE = {"research": 0.25, "dev": 0.35, "qa": 0.25, "shipping": 0.15}
