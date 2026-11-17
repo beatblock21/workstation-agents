@@ -55,6 +55,18 @@ def choose_option(h):
         h.deliverable += f"\n\nOWNER DECISION: proceed with {ans}"
         h.save()
 
+def dev_step(h):
+    out = step("dev", h, "qa")
+    tries = 0
+    while out.status != "failed" and not shipper.parse_files(out.deliverable) and tries < 2:
+        tries += 1
+        print("-> format gate: Dev output had no '### FILE:' blocks; asking Dev to redo")
+        note = ("FORMAT ERROR: your last answer had no '### FILE: path' blocks. Reply again with every file as a line "
+                "'### FILE: relative/path' followed by a fenced code block.\n\nYOUR LAST ANSWER:\n" + out.deliverable)
+        fix = Handoff(goal=h.goal, from_dept="owner", to_dept="dev", deliverable=h.deliverable + "\n\n" + note)
+        out = step("dev", fix, "qa")
+    return out
+
 def run(goal, auto=False, repo=None):
     if not auto:
         goal += clarify(goal)
@@ -64,7 +76,7 @@ def run(goal, auto=False, repo=None):
         choose_option(research)
     if research.status == "failed":
         return research
-    work = step("dev", research, "qa")
+    work = dev_step(research)
     if work.status == "failed":
         return work
     rounds = 0
@@ -97,7 +109,7 @@ def run(goal, auto=False, repo=None):
             rounds = MAX_QA_ROUNDS - 1
         fix = Handoff(goal=goal, from_dept="qa", to_dept="dev",
                       deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}\n\nEXECUTION RESULT:\n{report}{note}")
-        work = step("dev", fix, "qa")
+        work = dev_step(fix)
     final = Handoff(goal=goal, from_dept="qa", to_dept="shipping",
                     deliverable=f"{work.deliverable}\n\nQA VERDICT:\n{qa.deliverable}{override}")
     ship = step("shipping", final, "owner")

@@ -47,9 +47,9 @@ def ship(deliverable, shipping_text, repo_url):
     if not URL_RE.match(repo_url):
         raise ValueError("repo must look like https://github.com/owner/name.git")
     files = parse_files(deliverable)
-    extra = parse_files(shipping_text)
-    if "README.md" in extra and "README.md" not in files:
-        files["README.md"] = extra["README.md"]
+    readme = extract_readme(shipping_text)
+    if readme and "README.md" not in files:
+        files["README.md"] = readme
     m = re.search(r"^COMMIT:\s*(.+)$", shipping_text, re.M)
     msg = (m.group(1).strip() if m else "Add project built by workstation-agents")[:200]
     if not files:
@@ -81,3 +81,17 @@ def ship(deliverable, shipping_text, repo_url):
     if rc:
         raise RuntimeError("push failed (see output above)")
     return True
+
+def extract_readme(text):
+    m = re.search(r"^#{2,4}[ \t]*FILE:[ \t]*`?README\.md`?[ \t]*\n(.*)\Z", text, re.M | re.S)
+    if not m:
+        return None
+    lines = m.group(1).strip("\n").splitlines()
+    fenced = False
+    if lines and re.match(r"^`{2,}[ \t]*\S{0,20}[ \t]*$", lines[0]):
+        lines = lines[1:]
+        fenced = True
+    if fenced and lines and re.match(r"^`{2,}[ \t]*$", lines[-1]):
+        lines = lines[:-1]
+    out = "\n".join(lines).strip("\n")
+    return out or None

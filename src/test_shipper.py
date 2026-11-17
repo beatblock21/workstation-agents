@@ -13,3 +13,8 @@ for rel, content in [("sub/.env", "x=1"), ("k.py", "key = 'gsk_" + "a" * 30 + "'
         shipper.check_secrets(rel, content); print("NOT CAUGHT", rel)
     except ValueError:
         print("blocked", rel)
+
+B2 = chr(96) * 2
+bad = f"COMMIT: x\n### FILE: README.md\n{B2} trasladar\n# T\n{B3}bash\nrun\n{B3}\n{B2}\n"
+print(repr(shipper.extract_readme(bad)))
+print(repr(shipper.extract_readme("COMMIT: x\n### FILE: README.md\n# Plain\nhello\n")))
