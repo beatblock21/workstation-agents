@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import budget
+import journal
 load_dotenv()
 
 PROVIDERS = {
@@ -22,10 +23,15 @@ def ask(provider, messages, max_tokens=300, dept="misc"):
     return text
 
 def chat(messages, chain, dept="misc", max_tokens=300):
+    hit = journal.J.replay("chat")
+    if hit:
+        return hit[0], hit[1]
     errors = []
     for name in chain:
         try:
-            return name, ask(name, messages, max_tokens=max_tokens, dept=dept)
+            text = ask(name, messages, max_tokens=max_tokens, dept=dept)
+            journal.J.record("chat", [name, text])
+            return name, text
         except Exception as e:
             errors.append(f"{name}: {e}")
     raise RuntimeError("|".join(errors))

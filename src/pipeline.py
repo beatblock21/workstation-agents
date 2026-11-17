@@ -1,8 +1,9 @@
-import os, re, sys
+import os, re, sys, time
 from handoff import Handoff, ROOT
 from department import Department
 import human
 import runcheck
+import journal
 import shipper
 from dataclasses import replace
 
@@ -147,6 +148,19 @@ def run(goal, auto=False, repo=None):
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
+    if "--resume" in argv:
+        rid = argv[argv.index("--resume") + 1]
+        journal.J.start(rid)
+        if not journal.J.meta:
+            sys.exit(f"no saved run {rid}")
+        if journal.J.meta.get("done"):
+            sys.exit(f"run {rid} already finished")
+        m = journal.J.meta
+        print(f"Resuming run {rid} ({len(journal.J.entries)} steps already saved)")
+        res = run(m["goal"], m["auto"], m["repo"])
+        journal.J.finish()
+        print("Final status:", res.status)
+        sys.exit(0)
     repo = None
     if "--repo" in argv:
         i = argv.index("--repo")
@@ -159,5 +173,9 @@ if __name__ == "__main__":
     if os.path.isfile(arg):
         with open(arg, encoding="utf-8") as f:
             arg = f.read()
+    rid = time.strftime("%Y%m%d-%H%M%S")
+    journal.J.start(rid, {"goal": arg, "auto": auto, "repo": repo})
+    print(f"Run id: {rid}  (if it crashes: python src\\pipeline.py --resume {rid})")
     res = run(arg, auto, repo)
+    journal.J.finish()
     print("Final status:", res.status)
