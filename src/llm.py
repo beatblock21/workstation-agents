@@ -39,7 +39,9 @@ def _chat_once(messages, chain, dept="misc", max_tokens=300):
                 waits.append(e.retry_after)
             elif "429" in str(e):
                 waits.append(20)
-    raise RuntimeError("|".join(errors))
+    err = RuntimeError("|".join(errors))
+    err.waits = waits
+    raise err
 
 
 RETRY_WAIT = True

@@ -87,4 +87,24 @@ except budget.RateLimited:
 budget._WINDOW["groq"] = []
 budget.RATE["groq"] = {"rpm": 30, "tpm": 8000}
 
+# 11. wait-once retry waits and then succeeds (waits were never attached before the llm.py fix)
+slept = []
+real_sleep = llm.time.sleep
+llm.time.sleep = lambda s: slept.append(s)
+llm.RETRY_WAIT = True
+cnt = {"n": 0}
+def flaky(provider, messages, max_tokens=300, dept="misc"):
+    cnt["n"] += 1
+    if cnt["n"] <= 3:
+        raise budget.RateLimited("simulated", 5)
+    return "ok"
+llm.ask = flaky
+try:
+    got = llm.chat([{"role": "user", "content": "x"}], ["groq", "gemini", "openrouter"], dept="chaos")
+except Exception as e:
+    got = ("error", str(e))
+llm.ask = real_ask
+llm.time.sleep = real_sleep
+check("wait-once retry sleeps once and recovers", slept == [6.0] and got == ("groq", "ok"))
+
 print(f"\n{sum(results)}/{len(results)} passed")

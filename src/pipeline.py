@@ -5,6 +5,7 @@ import human
 import runcheck
 import journal
 import shipper
+import team
 from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
@@ -33,8 +34,8 @@ CLARIFY_PROMPT = ("You are the Research department. Read the goal and list the q
                   "First check the goal for contradictory or impossible constraints; if there are any, your first question must name the conflict and ask which constraint to relax. "
 "If the goal is already clear and consistent, reply NONE.")
 
-def clarify(goal):
-    raw = Department("research")._ask(f"GOAL:\n{goal}", CLARIFY_PROMPT)
+def clarify(goal, notes=""):
+    raw = Department("research")._ask(f"GOAL:\n{goal}{notes}", CLARIFY_PROMPT)
     qs = [l.strip()[2:].strip() for l in raw.splitlines() if l.strip().upper().startswith("Q:")][:MAX_QUESTIONS]
     if not qs:
         return ""
@@ -78,12 +79,21 @@ def dev_step(h):
         out = step("dev", fix, "qa")
     return out
 
-def run(goal, auto=False, repo=None):
+def run(goal, auto=False, repo=None, scale="solo", profile="default"):
+    notes = team.notes(goal, scale, profile)
     if not auto:
-        goal += clarify(goal)
-    h = Handoff(goal=goal, from_dept="owner", to_dept="research")
+        goal += clarify(goal, notes)
+    h = Handoff(goal=goal, from_dept="owner", to_dept="research", deliverable=notes)
     research = step("research", h, "dev")
     if research.status != "failed":
+        dm = re.search(r"^\W*DISPUTE:\s*(.+)$", research.deliverable, re.M | re.I)
+        if dm and not dm.group(1).strip().lower().startswith("none"):
+            if auto:
+                print("-> Research team flagged an unresolved DISPUTE (auto mode, not asking):", dm.group(1)[:200])
+            else:
+                dans = human.ask_human("dispute", "research", "Research's team could not settle this: " + dm.group(1)[:400] + "\nHow should Research proceed?")
+                research.deliverable += f"\n\nOWNER DECISION: {dans}"
+                research.save()
         choose_option(research, ask=not auto)
         dec = re.findall(r"^OWNER DECISION.*$", research.deliverable, re.M)
         if dec:
@@ -157,7 +167,7 @@ if __name__ == "__main__":
             sys.exit(f"run {rid} already finished")
         m = journal.J.meta
         print(f"Resuming run {rid} ({len(journal.J.entries)} steps already saved)")
-        res = run(m["goal"], m["auto"], m["repo"])
+        res = run(m["goal"], m["auto"], m["repo"], m.get("scale", "solo"), m.get("profile", "default"))
         journal.J.finish()
         print("Final status:", res.status)
         sys.exit(0)
@@ -167,6 +177,20 @@ if __name__ == "__main__":
         repo = argv[i + 1]
         del argv[i:i + 2]
     auto = "--auto" in argv
+    scale, profile = "solo", "default"
+    for flag in ("--scale", "--profile"):
+        if flag in argv:
+            i = argv.index(flag)
+            if i + 1 >= len(argv):
+                sys.exit(f"{flag} needs a value")
+            val = argv[i + 1]
+            del argv[i:i + 2]
+            if flag == "--scale":
+                scale = val
+            else:
+                profile = val
+    if scale not in ("solo", "small", "full"):
+        sys.exit("--scale must be solo, small or full")
     arg = " ".join(a for a in argv if a != "--auto").strip()
     if not arg:
         sys.exit('usage: python src\\pipeline.py "goal text"  (or a path to a goals file)')
@@ -174,8 +198,8 @@ if __name__ == "__main__":
         with open(arg, encoding="utf-8") as f:
             arg = f.read()
     rid = time.strftime("%Y%m%d-%H%M%S")
-    journal.J.start(rid, {"goal": arg, "auto": auto, "repo": repo})
+    journal.J.start(rid, {"goal": arg, "auto": auto, "repo": repo, "scale": scale, "profile": profile})
     print(f"Run id: {rid}  (if it crashes: python src\\pipeline.py --resume {rid})")
-    res = run(arg, auto, repo)
+    res = run(arg, auto, repo, scale, profile)
     journal.J.finish()
     print("Final status:", res.status)
