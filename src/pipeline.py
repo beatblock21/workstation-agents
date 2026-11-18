@@ -86,6 +86,8 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
     h = Handoff(goal=goal, from_dept="owner", to_dept="research", deliverable=notes)
     research = step("research", h, "dev")
     if research.status != "failed":
+        if auto:
+            print("\n--- RESEARCH BRIEF (auto) ---\n" + research.deliverable[:1800] + "\n--- end ---")
         dm = re.search(r"^\W*DISPUTE:\s*(.+)$", research.deliverable, re.M | re.I)
         if dm and not dm.group(1).strip().lower().startswith("none"):
             if auto:
@@ -152,7 +154,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             print("SHIPPING ERROR:", e)
     out = os.path.join(ROOT, "state", f"result-{ship.id}.local.md")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(f"# Goal\n{goal}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n")
+        f.write(f"# Goal\n{goal}\n\n# Specialist notes\n{notes or '(none)'}\n\n# Research brief\n{research.deliverable}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n")
     print("Result saved:", out)
     return ship
 

@@ -28,6 +28,7 @@ def notes(goal, scale="solo", profile="default"):
             print(f"   [research] specialist {n} failed ({str(e)[:80]}); continuing without it")
             continue
         done.append((n, text.strip()))
+        print(f"   [{n}] " + " ".join(text.split())[:300])
     if not done:
         return ""
     body = "\n\n".join(f"[{n}]\n{t}" for n, t in done)
