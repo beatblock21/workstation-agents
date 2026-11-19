@@ -25,3 +25,13 @@ safe = f"### FILE: calc.py\n{F}python\nimport ast\nprint(ast.dump(ast.parse('1+1
 print("ast mode=eval not flagged:", runcheck.check(safe)[0] is True)
 evil = f"### FILE: calc.py\n{F}python\nprint(eval('1+1'))\n{F}\n"
 print("real eval() still flagged:", runcheck.check(evil)[0] is None)
+
+w = f"### FILE: app.py\n{F}python\nwith open('out.txt', 'w') as fh:\n    fh.write('x')\nprint('wrote')\n{F}\n"
+print("relative write now runs:", runcheck.check(w)[0] is True)
+rd = f"### FILE: app.py\n{F}python\ntry:\n    open('warc.txt')\nexcept FileNotFoundError:\n    print('ok')\n{F}\n"
+print("read-mode open not flagged:", runcheck.check(rd)[0] is True)
+ab = f"### FILE: app.py\n{F}python\nopen('C:/x.txt', 'w')\n{F}\n"
+print("absolute-path write still flagged:", runcheck.check(ab)[0] is None)
+up = f"### FILE: app.py\n{F}python\nopen('../x.txt', 'w')\n{F}\n"
+print("parent-dir write still flagged:", runcheck.check(up)[0] is None)
+print("force=True runs flagged code:", runcheck.check(evil, force=True)[0] is True)

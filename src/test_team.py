@@ -89,4 +89,22 @@ NOTE["text"] = "NONE"
 pipeline.run("demo", auto=True, scale="small")
 check("auto: no conflict means no question", not asked)
 
+from handoff import Handoff
+real_dev_step = pipeline.dev_step
+FLAGGED = "### FILE: a.py\n" + chr(96) * 3 + "python\nimport socket\nassert 1 == 1\nprint('ok')\n" + chr(96) * 3
+pipeline.dev_step = lambda h: Handoff(goal=h.goal, from_dept="dev", to_dept="qa", deliverable=FLAGGED)
+
+asked.clear()
+human.ask_human = lambda kind, dept, question, options=None: (asked.append((kind, question)) or ("run in sandbox" if kind == "approval" else "go with A"))
+res = pipeline.run("demo", auto=True)
+check("flagged code: owner asked, sandbox run, pipeline finishes", any(k == "approval" for k, q in asked) and res.status == "ok")
+
+asked.clear()
+s = len(users)
+human.ask_human = lambda kind, dept, question, options=None: (asked.append((kind, question)) or "abort")
+res = pipeline.run("demo", auto=True)
+check("flagged code: owner declines -> run stops", res.status == "failed" and any(k == "approval" for k, q in asked))
+check("flagged code: QA never saw unexecuted code", not any(u[0] == "qa" for u in users[s:]))
+pipeline.dev_step = real_dev_step
+
 print(f"\n{sum(results)}/{len(results)} passed")

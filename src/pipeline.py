@@ -110,8 +110,19 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
         return work
     rounds = 0
     override = ""
+    sandbox_ok = False
     while True:
         ok, report = runcheck.check(work.deliverable)
+        if report.startswith("NOT RUN: flagged"):
+            if not sandbox_ok:
+                q = "The code was flagged and not executed:\n" + report + "\nRun it anyway in the sandbox (temp folder, stripped environment, timeout) so QA can grade real results?"
+                ans = human.escalate(work, "approval", "qa", q, ["run in sandbox", "abort"])
+                if ans != "run in sandbox":
+                    work.status = "failed"
+                    work.save()
+                    return work
+                sandbox_ok = True
+            ok, report = runcheck.check(work.deliverable, force=True)
         print("-> execution check:", report.splitlines()[0])
         qa_in = replace(work, deliverable=work.deliverable + "\n\nEXECUTION RESULT (run by the system, not by you):\n" + report)
         qa = step("qa", qa_in, "shipping")
