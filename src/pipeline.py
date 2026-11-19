@@ -6,6 +6,8 @@ import runcheck
 import journal
 import shipper
 import team
+import owner
+import runstats
 from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
@@ -32,7 +34,7 @@ CLARIFY_PROMPT = ("You are the Research department. Read the goal and list the q
                   "before researching, only ones whose answers would change the approach (scope, scale, users, "
                   "constraints, preferred tools, deadline). Max 5. One per line, each starting with 'Q:'. "
                   "First check the goal for contradictory or impossible constraints; if there are any, your first question must name the conflict and ask which constraint to relax. "
-"If the goal is already clear and consistent, reply NONE.")
+"If the goal is already clear and consistent, reply NONE. Do not ask about anything the OWNER STANDING DEFAULTS in the goal already answer.")
 
 def clarify(goal, notes=""):
     raw = Department("research")._ask(f"GOAL:\n{goal}{notes}", CLARIFY_PROMPT)
@@ -80,6 +82,7 @@ def dev_step(h):
     return out
 
 def run(goal, auto=False, repo=None, scale="solo", profile="default"):
+    goal += owner.defaults()
     notes = team.notes(goal, scale, profile)
     if not auto:
         goal += clarify(goal, notes)
@@ -133,6 +136,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             break
         rounds += 1
         print(f"-> QA: FAIL (round {rounds}/{MAX_QA_ROUNDS})")
+        runstats.R.qa_fails += 1
         note = ""
         if rounds >= MAX_QA_ROUNDS:
             q = f"QA has failed the work {rounds} times. Latest findings:\n{qa.deliverable[:600]}"
@@ -167,7 +171,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             print("SHIPPING ERROR:", e)
     out = os.path.join(ROOT, "state", f"result-{ship.id}.local.md")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(f"# Goal\n{goal}\n\n{notes.strip() or 'SPECIALIST NOTES: (none)'}\n\n# Research brief\n{research.deliverable}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n")
+        f.write(f"# Goal\n{goal}\n\n{notes.strip() or 'SPECIALIST NOTES: (none)'}\n\n# Research brief\n{research.deliverable}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n\n# Run report\n{runstats.R.summary()}\n")
     print("Result saved:", out)
     return ship
 

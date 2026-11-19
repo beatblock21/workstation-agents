@@ -1,4 +1,5 @@
 import json, os, datetime, time
+import runstats
 
 LIMITS = {  # per provider per UTC day; placeholders, tune later
     "groq": {"requests": 900, "tokens": 180000},
@@ -42,6 +43,7 @@ def check(provider, dept, est_tokens=0):
 
 def record(provider, dept, tokens):
     _WINDOW.setdefault(provider, []).append((time.time(), int(tokens or 0)))
+    runstats.R.note(provider, dept, tokens)
     data = _load()
     d = data["usage"].setdefault(f"{provider}|{dept}", {"requests": 0, "tokens": 0})
     d["requests"] += 1

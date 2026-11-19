@@ -107,4 +107,28 @@ check("flagged code: owner declines -> run stops", res.status == "failed" and an
 check("flagged code: QA never saw unexecuted code", not any(u[0] == "qa" for u in users[s:]))
 pipeline.dev_step = real_dev_step
 
+import json, os, tempfile
+import owner, runstats
+
+runstats.R.by.clear()
+runstats.R.note("groq", "dev", 120)
+runstats.R.note("gemini", "dev", 30)
+runstats.R.note("gemini", "qa", 50)
+sm = runstats.R.summary()
+check("run report totals calls and tokens", "api calls: 3" in sm and "tokens: 200" in sm and "dev: 2 calls, 150 tokens" in sm)
+runstats.R.by.clear()  # keep the exit-time report quiet
+
+real_owner_path = owner.PATH
+with tempfile.TemporaryDirectory() as td:
+    owner.PATH = os.path.join(td, "o.json")
+    check("owner defaults: missing file gives empty string", owner.defaults() == "")
+    with open(owner.PATH, "w", encoding="utf-8") as fh:
+        json.dump({"language": "Python 3.12", "notes": ["small and simple"]}, fh)
+    dtext = owner.defaults()
+    check("owner defaults: rendered as goal suffix", "OWNER STANDING DEFAULTS" in dtext and "- language: Python 3.12" in dtext and "- small and simple" in dtext)
+    s = len(users)
+    pipeline.run("demo", auto=True)
+    check("owner defaults reach Research", any(u[0] == "research" and "OWNER STANDING DEFAULTS" in u[2] for u in users[s:]))
+owner.PATH = real_owner_path
+
 print(f"\n{sum(results)}/{len(results)} passed")
