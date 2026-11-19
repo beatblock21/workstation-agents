@@ -2,6 +2,7 @@ import human, llm, pipeline, team
 
 users = []          # (dept, system, user) for every fake LLM call
 FAIL = {"on": False}
+NOTE = {"text": "note from specialist"}
 BRIEF = {"text": "OPTION A: x\nRECOMMENDATION: OPTION A - y"}
 
 def fake_ask(provider, messages, max_tokens=300, dept="misc"):
@@ -16,7 +17,7 @@ def fake_ask(provider, messages, max_tokens=300, dept="misc"):
     if dept == "shipping":
         return "COMMIT: demo\n### FILE: README.md\n# Demo"
     if dept == "research" and "Research specialist" in sysm:
-        return "note from specialist"
+        return NOTE["text"]
     return BRIEF["text"]
 
 llm.ask = fake_ask
@@ -76,5 +77,16 @@ asked.clear()
 BRIEF["text"] = "OPTION A: x\nOPTION B: y\nDISPUTE: none\nRECOMMENDATION: OPTION A - y"
 pipeline.run("demo", auto=False, scale="small")
 check("'DISPUTE: none' does not bother the owner", not any(k == "dispute" for k, q in asked))
+
+asked.clear()
+NOTE["text"] = "CONFLICT: speed vs safety"
+BRIEF["text"] = "OPTION A: x\nOPTION B: y\nRECOMMENDATION: OPTION A - y"
+pipeline.run("demo", auto=True, scale="small")
+check("auto: specialist CONFLICT forces the owner decision", any(k == "decision" for k, q in asked))
+
+asked.clear()
+NOTE["text"] = "NONE"
+pipeline.run("demo", auto=True, scale="small")
+check("auto: no conflict means no question", not asked)
 
 print(f"\n{sum(results)}/{len(results)} passed")

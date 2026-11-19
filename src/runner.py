@@ -36,7 +36,7 @@ def check_files(py, timeout=15):
                 lines.append(f"[{rel}] TIMED OUT after {t}s")
                 worst = worst or 124
                 continue
-            out = ((p.stdout or "") + (p.stderr or "")).strip()[-600:]
+            out = ((p.stdout or "") + (p.stderr or "")).strip()[-2000:]
             if p.returncode != 0 and "EOFError: EOF when reading a line" in out:
                 lines.append(f"[{rel}] reached an input() prompt (interactive program) - OK")
                 continue

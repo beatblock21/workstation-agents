@@ -96,6 +96,8 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
                 dans = human.ask_human("dispute", "research", "Research's team could not settle this: " + dm.group(1)[:400] + "\nHow should Research proceed?")
                 research.deliverable += f"\n\nOWNER DECISION: {dans}"
                 research.save()
+        if re.search(r"^\W*CONFLICT:", notes, re.M | re.I) and not re.search(r"^\W*CONFLICT:", research.deliverable, re.M | re.I):
+            research.deliverable = "CONFLICT: flagged by the Research team (see specialist notes)\n" + research.deliverable
         choose_option(research, ask=not auto)
         dec = re.findall(r"^OWNER DECISION.*$", research.deliverable, re.M)
         if dec:
@@ -135,7 +137,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
                 note = f"\n\nOWNER GUIDANCE:\n{ans}"
             rounds = MAX_QA_ROUNDS - 1
         fix = Handoff(goal=goal, from_dept="qa", to_dept="dev",
-                      deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}\n\nEXECUTION RESULT:\n{report}{note}")
+                      deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}\n\nEXECUTION RESULT:\n{report}{note}\n\nFIX INSTRUCTIONS: first state ROOT CAUSE in one line from the EXECUTION RESULT, then change only the code that causes the failure and keep every other line as it is. If a test expectation is wrong fix the test, otherwise fix the code. Still reply with every file in full as ### FILE blocks, then the ROOT CAUSE line.")
         work = dev_step(fix)
     if report.startswith("NOT RUN: flagged"):
         gate_q = "The code was NOT executed (flagged patterns), so QA judged it by reading only.\n" + report
