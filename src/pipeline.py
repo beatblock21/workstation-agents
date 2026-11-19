@@ -8,6 +8,7 @@ import shipper
 import team
 import owner
 import runstats
+import devteam
 from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
@@ -82,6 +83,7 @@ def dev_step(h):
     return out
 
 def run(goal, auto=False, repo=None, scale="solo", profile="default"):
+    devteam.reset()
     goal += owner.defaults()
     notes = team.notes(goal, scale, profile)
     if not auto:
@@ -108,7 +110,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             research.goal = goal
     if research.status == "failed":
         return research
-    work = dev_step(research)
+    work = (devteam.build(research, goal, scale) if scale != "solo" else None) or dev_step(research)
     if work.status == "failed":
         return work
     rounds = 0
@@ -151,6 +153,10 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             if ans != "send back to dev once more":
                 note = f"\n\nOWNER GUIDANCE:\n{ans}"
             rounds = MAX_QA_ROUNDS - 1
+        team_work = devteam.fix(goal, work, qa.deliverable, report, scale, note) if scale != "solo" else None
+        if team_work is not None:
+            work = team_work
+            continue
         fix = Handoff(goal=goal, from_dept="qa", to_dept="dev",
                       deliverable=f"PREVIOUS DELIVERABLE:\n{work.deliverable}\n\nQA FINDINGS:\n{qa.deliverable}\n\nEXECUTION RESULT:\n{report}{note}\n\nFIX INSTRUCTIONS: first state ROOT CAUSE in one line from the EXECUTION RESULT, then change only the code that causes the failure and keep every other line as it is. If a test expectation is wrong fix the test, otherwise fix the code. Still reply with every file in full as ### FILE blocks, then the ROOT CAUSE line.")
         work = dev_step(fix)
