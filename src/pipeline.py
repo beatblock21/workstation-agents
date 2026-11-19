@@ -62,7 +62,7 @@ def choose_option(h, ask=True):
     print("\n--- RESEARCH BRIEF (options) ---\n" + h.deliverable[(m.start() if m else 0):][:2500] + "\n--- end ---")
     ans = human.escalate(h, "decision", "research", q, labels + ["let Research decide"])
     if ans.startswith("let Research") and rec:
-        ans = f"follow Research's recommendation, option {rec.group(1).upper()}"
+        ans = f"Research's recommendation, option {rec.group(1).upper()}"
     if not ans.startswith("let Research"):
         h.deliverable += f"\n\nOWNER DECISION: proceed with {ans}"
         h.save()
@@ -154,7 +154,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             print("SHIPPING ERROR:", e)
     out = os.path.join(ROOT, "state", f"result-{ship.id}.local.md")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(f"# Goal\n{goal}\n\n# Specialist notes\n{notes or '(none)'}\n\n# Research brief\n{research.deliverable}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n")
+        f.write(f"# Goal\n{goal}\n\n{notes.strip() or 'SPECIALIST NOTES: (none)'}\n\n# Research brief\n{research.deliverable}\n\n# Deliverable\n{work.deliverable}\n\n# QA\n{qa.deliverable}\n\n# Shipping notes\n{ship.deliverable}\n")
     print("Result saved:", out)
     return ship
 
