@@ -3,7 +3,7 @@ Usage: python src\\test_all.py [--live]    Exit code 0 only if every suite is cl
 import os, re, subprocess, sys, time
 
 SRC = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["test_team", "test_resume", "test_runcheck", "test_shipper", "test_edits", "test_devteam"]
+SUITES = ["test_team", "test_resume", "test_runcheck", "test_shipper", "test_edits", "test_devteam", "test_qateam"]
 LIVE = ["chaos"]
 BAD_WORDS = ("ALLOWED?!", "NOT CAUGHT")
 

@@ -23,8 +23,10 @@ def reset_replies():
 def fake_ask(provider, messages, max_tokens=300, dept="misc"):
     sysm = messages[0]["content"]
     role = ("lead" if "Dev lead" in sysm else "author" if "Dev author" in sysm else "tester" if "Dev tester" in sysm
-            else "fixer" if "Dev fixer" in sysm else dept)
+            else "fixer" if "Dev fixer" in sysm else "qa_aud" if "constraint auditor" in sysm else "qa_probe" if "edge-case prober" in sysm else dept)
     calls.append((role, provider))
+    if role in ("qa_aud", "qa_probe"):
+        return "no evidence in this test"
     if role == "fixer":
         return REPLY["fixer"].pop(0)
     if role == "qa":

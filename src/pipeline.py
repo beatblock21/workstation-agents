@@ -9,6 +9,7 @@ import team
 import owner
 import runstats
 import devteam
+import qateam
 from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
@@ -84,6 +85,7 @@ def dev_step(h):
 
 def run(goal, auto=False, repo=None, scale="solo", profile="default"):
     devteam.reset()
+    qateam.reset()
     goal += owner.defaults()
     notes = team.notes(goal, scale, profile)
     if not auto:
@@ -129,7 +131,8 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
                 sandbox_ok = True
             ok, report = runcheck.check(work.deliverable, force=True)
         print("-> execution check:", report.splitlines()[0])
-        qa_in = replace(work, deliverable=work.deliverable + "\n\nEXECUTION RESULT (run by the system, not by you):\n" + report)
+        extra = qateam.evidence(goal, work, report, scale) if scale != "solo" else ""
+        qa_in = replace(work, deliverable=work.deliverable + "\n\nEXECUTION RESULT (run by the system, not by you):\n" + report + extra)
         qa = step("qa", qa_in, "shipping")
         if qa.status == "failed":
             return qa
