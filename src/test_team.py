@@ -3,6 +3,7 @@ import human, llm, pipeline, team
 users = []          # (dept, system, user) for every fake LLM call
 FAIL = {"on": False}
 NOTE = {"text": "note from specialist"}
+VERIFY = {"text": "YES - they cannot both hold"}
 BRIEF = {"text": "OPTION A: x\nRECOMMENDATION: OPTION A - y"}
 
 def fake_ask(provider, messages, max_tokens=300, dept="misc"):
@@ -10,6 +11,8 @@ def fake_ask(provider, messages, max_tokens=300, dept="misc"):
     users.append((dept, sysm, usr))
     if FAIL["on"] and "requirements analyst" in sysm:
         raise RuntimeError("boom")
+    if "strict logic checker" in sysm:
+        return VERIFY["text"]
     if dept == "dev":
         return "### FILE: a.py\n```python\nassert 1 == 1\n```"
     if dept == "qa":
@@ -17,7 +20,7 @@ def fake_ask(provider, messages, max_tokens=300, dept="misc"):
     if dept == "shipping":
         return "COMMIT: demo\n### FILE: README.md\n# Demo"
     if dept == "research" and "Research specialist" in sysm:
-        return NOTE["text"]
+        return NOTE["text"] if "conflict spotter" in sysm else "note from specialist"
     return BRIEF["text"]
 
 llm.ask = fake_ask
@@ -130,5 +133,21 @@ with tempfile.TemporaryDirectory() as td:
     pipeline.run("demo", auto=True)
     check("owner defaults reach Research", any(u[0] == "research" and "OWNER STANDING DEFAULTS" in u[2] for u in users[s:]))
 owner.PATH = real_owner_path
+
+NOTE["text"] = "CONFLICT: dry-run default vs an --execute flag"
+VERIFY["text"] = "NO - a default plus a flag satisfies both."
+BRIEF["text"] = "OPTION A: x\nOPTION B: y\nRECOMMENDATION: OPTION A - y"
+asked.clear()
+pipeline.run("demo", auto=True, scale="small")
+check("conflict check: a clear NO demotes the CONFLICT, no owner question", not asked)
+out = team.notes("g", "small")
+check("conflict check: demoted line is marked TENSION", "TENSION: dry-run default" in out and "CONFLICT:" not in out)
+
+VERIFY["text"] = "Hmm, not sure."
+asked.clear()
+pipeline.run("demo", auto=True, scale="small")
+check("conflict check: an unclear answer keeps the CONFLICT and asks", any(k == "decision" for k, q in asked))
+VERIFY["text"] = "YES - they cannot both hold"
+NOTE["text"] = "note from specialist"
 
 print(f"\n{sum(results)}/{len(results)} passed")
