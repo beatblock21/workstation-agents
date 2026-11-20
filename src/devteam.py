@@ -47,7 +47,9 @@ def signature(report):
     lines = [l.strip() for l in (report or "").splitlines() if l.strip()]
     err = [l for l in lines if re.search(r"(Error|Exception|FAIL|assert)", l)]
     line = err[-1] if err else (lines[-1] if lines else "")
-    return re.sub(r"\d+", "N", line)[:120]
+    frames = [m.group(1) for l in lines for m in [re.match(r'File ".*", line \d+, in (\S+)', l)] if m]
+    where = f"{frames[-1]}: " if frames else ""
+    return re.sub(r"\d+", "N", where + line)[:120]
 
 
 def build(h, goal, scale):

@@ -128,4 +128,10 @@ roles = [c[0] for c in calls[s:]]
 check("pipeline solo: classic Dev once, no team roles",
       res.status == "ok" and roles.count("dev") == 1 and not {"lead", "author", "tester", "fixer"} & set(roles))
 
+rep_a = 'RAN WITH ERRORS (exit 1)\n[t.py] exit 1\nTraceback (most recent call last):\n  File "t.py", line 12, in test_a\n    assert x\nAssertionError'
+rep_b = rep_a.replace("test_a", "test_b").replace("line 12", "line 30")
+rep_c = rep_a.replace("line 12", "line 99")
+check("signature separates failures in different tests", devteam.signature(rep_a) != devteam.signature(rep_b))
+check("signature ignores line numbers", devteam.signature(rep_a) == devteam.signature(rep_c))
+
 print(f"\n{sum(results)}/{len(results)} passed")
