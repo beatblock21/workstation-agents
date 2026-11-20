@@ -44,6 +44,9 @@ def _ask(role, user, chain=None):
 
 def signature(report):
     """A stable fingerprint of the failure (numbers removed) to spot the same error twice."""
+    fails = sorted(set(re.findall(r"TEST FAIL: (\w+)", report or "")))
+    if fails:
+        return ("FAIL: " + ",".join(fails))[:120]
     lines = [l.strip() for l in (report or "").splitlines() if l.strip()]
     err = [l for l in lines if re.search(r"(Error|Exception|FAIL|assert)", l)]
     line = err[-1] if err else (lines[-1] if lines else "")
