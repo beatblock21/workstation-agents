@@ -93,7 +93,7 @@ def main(argv):
         for _ in range(repeat):
             for s in scales:
                 print(f"running {g} / {s} ...", flush=True)
-                row = run_case(g, bench_goals.GOALS[g]["goal"], s, stamp)
+                row = run_case(g, bench_goals.GOALS[g]["goal"], s, f"{stamp}-{len(rows) + 1}")
                 rows.append(row)
                 total = row["passed"] + row["failed"]
                 print(f"  {row['status']:<8} calls {row['calls']:>3}  tokens {row['tokens']:>6}  {row['secs']:>4}s  "
