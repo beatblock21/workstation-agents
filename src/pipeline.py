@@ -83,11 +83,25 @@ def dev_step(h):
         out = step("dev", fix, "qa")
     return out
 
+def split_scale(scale):
+    """'small' -> all three teams; 'small:dev' or 'full:research+qa' -> only those teams; 'solo' -> none.
+    Returns (research_scale, dev_scale, qa_scale); a team that is off gets 'solo'."""
+    base, _, only = scale.partition(":")
+    if base == "solo":
+        return "solo", "solo", "solo"
+    teams = set(only.split("+")) if only else {"research", "dev", "qa"}
+    bad = teams - {"research", "dev", "qa"}
+    if bad:
+        raise ValueError(f"unknown team(s) {sorted(bad)}; use research, dev, qa")
+    return tuple(base if t in teams else "solo" for t in ("research", "dev", "qa"))
+
+
 def run(goal, auto=False, repo=None, scale="solo", profile="default"):
     devteam.reset()
     qateam.reset()
     goal += owner.defaults()
-    notes = team.notes(goal, scale, profile)
+    rs, ds, qs = split_scale(scale)
+    notes = team.notes(goal, rs, profile)
     if not auto:
         goal += clarify(goal, notes)
     h = Handoff(goal=goal, from_dept="owner", to_dept="research", deliverable=notes)
@@ -112,7 +126,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             research.goal = goal
     if research.status == "failed":
         return research
-    work = (devteam.build(research, goal, scale) if scale != "solo" else None) or dev_step(research)
+    work = (devteam.build(research, goal, ds) if ds != "solo" else None) or dev_step(research)
     if work.status == "failed":
         return work
     rounds = 0
@@ -131,7 +145,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
                 sandbox_ok = True
             ok, report = runcheck.check(work.deliverable, force=True)
         print("-> execution check:", report.splitlines()[0])
-        extra = qateam.evidence(goal, work, report, scale) if scale != "solo" else ""
+        extra = qateam.evidence(goal, work, report, qs) if qs != "solo" else ""
         qa_in = replace(work, deliverable=work.deliverable + "\n\nEXECUTION RESULT (run by the system, not by you):\n" + report + extra)
         qa = step("qa", qa_in, "shipping")
         if qa.status == "failed":
@@ -156,7 +170,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             if ans != "send back to dev once more":
                 note = f"\n\nOWNER GUIDANCE:\n{ans}"
             rounds = MAX_QA_ROUNDS - 1
-        team_work = devteam.fix(goal, work, qa.deliverable, report, scale, note) if scale != "solo" else None
+        team_work = devteam.fix(goal, work, qa.deliverable, report, ds, note) if ds != "solo" else None
         if team_work is not None:
             work = team_work
             continue
@@ -217,8 +231,12 @@ if __name__ == "__main__":
                 scale = val
             else:
                 profile = val
-    if scale not in ("solo", "small", "full"):
-        sys.exit("--scale must be solo, small or full")
+    if scale.split(":")[0] not in ("solo", "small", "full"):
+        sys.exit("--scale must be solo, small or full, optionally with teams such as small:dev or full:research+qa")
+    try:
+        split_scale(scale)
+    except ValueError as e:
+        sys.exit(str(e))
     arg = " ".join(a for a in argv if a != "--auto").strip()
     if not arg:
         sys.exit('usage: python src\\pipeline.py "goal text"  (or a path to a goals file)')
