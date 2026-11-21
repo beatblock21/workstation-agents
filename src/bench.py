@@ -4,7 +4,7 @@ Usage: python src\\bench.py [--goals slugify,lru,rename] [--scales solo,small] [
 It spends free-tier calls and takes a while. Per-run logs: state\\bench-<stamp>-<goal>-<scale>.local.log,
 summary: state\\bench-<stamp>.local.json."""
 import contextlib, io, json, os, re, sys, time
-import bench_goals, edits, human, pipeline, runcheck, runstats, shipper
+import bench_goals, bench_goals_hard, edits, human, pipeline, runcheck, runstats, shipper
 from handoff import ROOT
 
 
