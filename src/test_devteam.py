@@ -138,4 +138,14 @@ rep_t = "RAN WITH ERRORS (exit 1)\n[test_x.py] exit 1\nTEST PASS: test_c\nTEST F
 check("signature lists all failing test names", devteam.signature(rep_t) == "FAIL: test_a,test_b")
 check("same failing tests with other messages share a signature", devteam.signature(rep_t) == devteam.signature(rep_t.replace("1 != 2", "9 != 9")))
 
+rep_a = 'RAN WITH ERRORS (exit 1)\n[t.py] exit 1\nTraceback (most recent call last):\n  File "t.py", line 12, in test_a\n    assert x\nAssertionError'
+rep_b = rep_a.replace("test_a", "test_b").replace("line 12", "line 30")
+rep_c = rep_a.replace("line 12", "line 99")
+check("signature separates failures in different tests", devteam.signature(rep_a) != devteam.signature(rep_b))
+check("signature ignores line numbers", devteam.signature(rep_a) == devteam.signature(rep_c))
+
+rep_t = "RAN WITH ERRORS (exit 1)\n[test_x.py] exit 1\nTEST PASS: test_c\nTEST FAIL: test_b: AssertionError: 1 != 2\nTEST FAIL: test_a: AssertionError: 3 != 4"
+check("signature lists all failing test names", devteam.signature(rep_t) == "FAIL: test_a,test_b")
+check("same failing tests with other messages share a signature", devteam.signature(rep_t) == devteam.signature(rep_t.replace("1 != 2", "9 != 9")))
+
 print(f"\n{sum(results)}/{len(results)} passed")
