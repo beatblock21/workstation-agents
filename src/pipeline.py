@@ -10,6 +10,7 @@ import owner
 import runstats
 import devteam
 import qateam
+import iterate
 from dataclasses import replace
 
 MAX_QA_ROUNDS = 2
@@ -96,15 +97,21 @@ def split_scale(scale):
     return tuple(base if t in teams else "solo" for t in ("research", "dev", "qa"))
 
 
-def run(goal, auto=False, repo=None, scale="solo", profile="default"):
+def run(goal, auto=False, repo=None, scale="solo", profile="default", project=None):
     devteam.reset()
     qateam.reset()
     goal += owner.defaults()
+    pfiles, pctx = {}, ""
+    if project:
+        os.makedirs(project, exist_ok=True)
+        pfiles, pctx = iterate.prepare(project, goal)
+        if pfiles:
+            goal += "\n\nCHANGE REQUEST on an existing project: all existing behaviour and all existing tests must keep working."
     rs, ds, qs = split_scale(scale)
     notes = team.notes(goal, rs, profile)
     if not auto:
         goal += clarify(goal, notes)
-    h = Handoff(goal=goal, from_dept="owner", to_dept="research", deliverable=notes)
+    h = Handoff(goal=goal, from_dept="owner", to_dept="research", deliverable=notes + (pctx if pfiles else ""))
     research = step("research", h, "dev")
     if research.status != "failed":
         if auto:
@@ -126,7 +133,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             research.goal = goal
     if research.status == "failed":
         return research
-    work = (devteam.build(research, goal, ds) if ds != "solo" else None) or dev_step(research)
+    work = iterate.edit_step(research, goal, pfiles, pctx) if pfiles else ((devteam.build(research, goal, ds) if ds != "solo" else None) or dev_step(research))
     if work.status == "failed":
         return work
     rounds = 0
@@ -170,7 +177,7 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             if ans != "send back to dev once more":
                 note = f"\n\nOWNER GUIDANCE:\n{ans}"
             rounds = MAX_QA_ROUNDS - 1
-        team_work = devteam.fix(goal, work, qa.deliverable, report, ds, note) if ds != "solo" else None
+        team_work = devteam.fix(goal, work, qa.deliverable, report, ds if ds != "solo" else "small", note) if (ds != "solo" or pfiles) else None
         if team_work is not None:
             work = team_work
             continue
@@ -184,6 +191,8 @@ def run(goal, auto=False, repo=None, scale="solo", profile="default"):
             qa.status = "failed"
             qa.save()
             return qa
+    if project and not override:
+        iterate.save(project, work.deliverable)
     final = Handoff(goal=goal, from_dept="qa", to_dept="shipping",
                     deliverable=f"{work.deliverable}\n\nQA VERDICT:\n{qa.deliverable}{override}")
     ship = step("shipping", final, "owner")
@@ -209,10 +218,15 @@ if __name__ == "__main__":
             sys.exit(f"run {rid} already finished")
         m = journal.J.meta
         print(f"Resuming run {rid} ({len(journal.J.entries)} steps already saved)")
-        res = run(m["goal"], m["auto"], m["repo"], m.get("scale", "solo"), m.get("profile", "default"))
+        res = run(m["goal"], m["auto"], m["repo"], m.get("scale", "solo"), m.get("profile", "default"), m.get("project"))
         journal.J.finish()
         print("Final status:", res.status)
         sys.exit(0)
+    project = None
+    if "--project" in argv:
+        i = argv.index("--project")
+        project = argv[i + 1]
+        del argv[i:i + 2]
     repo = None
     if "--repo" in argv:
         i = argv.index("--repo")
@@ -244,8 +258,8 @@ if __name__ == "__main__":
         with open(arg, encoding="utf-8") as f:
             arg = f.read()
     rid = time.strftime("%Y%m%d-%H%M%S")
-    journal.J.start(rid, {"goal": arg, "auto": auto, "repo": repo, "scale": scale, "profile": profile})
+    journal.J.start(rid, {"goal": arg, "auto": auto, "repo": repo, "scale": scale, "profile": profile, "project": project})
     print(f"Run id: {rid}  (if it crashes: python src\\pipeline.py --resume {rid})")
-    res = run(arg, auto, repo, scale, profile)
+    res = run(arg, auto, repo, scale, profile, project)
     journal.J.finish()
     print("Final status:", res.status)
